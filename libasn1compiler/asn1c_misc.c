@@ -28,7 +28,14 @@ static char *res_kwd[] = {
 	"noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq",
 	"private", "protected", "public", "reinterpret_cast", "static_assert",
 	"static_cast", "template", "this", "thread_local", "throw", "true", "try",
-	"typeid", "typename", "using", "virtual", "wchar_t", "xor", "xor_eq"
+	"typeid", "typename", "using", "virtual", "wchar_t", "xor", "xor_eq",
+		/*
+		 * Not keywords, but predefined macros that cannot be used as
+		 * identifiers either: an ASN.1 open type whose alternative is the
+		 * NULL type yields a member literally named NULL, which the
+		 * preprocessor expands (e.g. "NULL_t NULL;" -> "NULL_t ((void*)0);").
+		 */
+	"NULL", "EOF", "offsetof"
 };
 static int
 reserved_keyword(const char *str) {
@@ -165,6 +172,8 @@ asn1c_make_identifier(enum ami_flags_e flags, asn1p_expr_t *expr, ...) {
 
 	if(prefix)
 		size += 1 + strlen(prefix);
+	/* Headroom for the reserved-keyword disambiguation suffix below. */
+	size += sizeof("TYPE");
 	/*
 	 * Make sure we have the required amount of storage.
 	 */
@@ -190,6 +199,7 @@ asn1c_make_identifier(enum ami_flags_e flags, asn1p_expr_t *expr, ...) {
 		nodelimiter = 1;
 	}
 	nextstr = "";
+	int reserved_suffix = 0;
 	for(str = 0; str || nextstr; str = nextstr) {
 		int subst_made = 0;
 		nextstr = *(psptr) ? *(psptr++) : va_arg(ap, char *);
@@ -221,7 +231,15 @@ asn1c_make_identifier(enum ami_flags_e flags, asn1p_expr_t *expr, ...) {
 		 */
 		if((flags & AMI_CHECK_RESERVED)
 		&& str == first && !nextstr && reserved_keyword(str)) {
-			*p++ = toupper(*str++);
+			/*
+			 * Capitalising is enough for the lowercase C/C++ keywords,
+			 * but not for the uppercase predefined macros (NULL, EOF):
+			 * those need a distinguishing suffix instead.
+			 */
+			if(toupper(*str) == *str)
+				reserved_suffix = 1;
+			else
+				*p++ = toupper(*str++);
 			/* Fall through */
 		}
 
@@ -240,6 +258,10 @@ asn1c_make_identifier(enum ami_flags_e flags, asn1p_expr_t *expr, ...) {
 		}
 	}
 	va_end(ap);
+	if(reserved_suffix) {
+		strcpy(p, "TYPE");
+		p += 4;
+	}
 	*p = '\0';
 
 	assert((p - storage) <= storage_size);
