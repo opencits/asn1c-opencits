@@ -7,6 +7,17 @@ static int constraint_type_resolve(arg_t *arg, asn1p_constraint_t *ct);
 static int constraint_object_resolve(arg_t *arg, asn1p_value_t *value);
 static int constraint_value_resolve(arg_t *arg, asn1p_value_t **value, enum asn1p_constraint_type_e real_ctype);
 
+static int
+_only_table_constraints(const asn1p_constraint_t *ct) {
+	unsigned int i;
+	if(!ct) return 0;
+	if(ct->type == ACT_CA_CRC) return 1;
+	if(ct->type != ACT_CA_SET || ct->el_count == 0) return 0;
+	for(i = 0; i < ct->el_count; i++)
+		if(!_only_table_constraints(ct->elements[i])) return 0;
+	return 1;
+}
+
 int
 asn1constraint_pullup(arg_t *arg) {
 	asn1p_expr_t *expr = arg->expr;
@@ -103,8 +114,10 @@ asn1constraint_pullup(arg_t *arg) {
 	if(ct_parent) {
 		/*
 		 * If we have a parent, remove all the extensions (46.4).
+		 * A table constraint alone is not PER-visible and keeps them.
 		 */
-		_remove_extensions(arg, ct_parent, 0);
+		if(!_only_table_constraints(ct_expr))
+			_remove_extensions(arg, ct_parent, 0);
 
 		expr->combined_constraints = ct_parent;
 		if(ct_expr->type == ACT_CA_SET) {

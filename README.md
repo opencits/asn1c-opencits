@@ -45,6 +45,15 @@ library. Compatibility warning contributed by <shakespark@gmail.com>.
 See [ChangeLog](ChangeLog) for the complete release history and
 [release-notes/v1.4.md](release-notes/v1.4.md) for the v1.4 release notes.
 
+## Local patches
+
+Patches applied in this tree on top of upstream, kept in [patches/](patches/)
+for re-applying after an upstream merge (`git apply patches/<file>`):
+
+| Patch | Fix |
+|-------|-----|
+| [0001-keep-extensibility-for-table-constrained-class-fields.patch](patches/0001-keep-extensibility-for-table-constrained-class-fields.patch) | PER: a component `CLASS.&id({ObjectSet})` whose field type is extensible (e.g. ETSI POIM `PoiType ::= INTEGER(1..128,...)`) lost its extension bit, because the non PER-visible table constraint made `asn1constraint_pullup()` strip the parent's extensions. Affects ETSI POIM `poiType`, IVI `InformationContainer`, `WrappedExtensionContainer`. |
+
 # ASN.1 Transfer Syntaxes
 <details>
 <summary>ASN.1 encodings interoperability table</summary>

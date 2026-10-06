@@ -1,0 +1,61 @@
+Subject: [PATCH] PER: keep extensibility of class field types under table constraints
+
+Problem: a component typed as a class field reference with only a table
+constraint, e.g.
+
+    PoiType ::= INTEGER(1..128,...)
+    BLOCK-TYPE ::= CLASS { &id PoiType, &Content } ...
+    WrappedPoiInformationBlock ::= SEQUENCE {
+        poiType  BLOCK-TYPE.&id({PoiInformationSet}), ...
+
+was generated as (1..128) without APC_EXTENSIBLE. asn1constraint_pullup()
+removes the parent's extension markers whenever the component has its own
+constraint, but table constraints are not PER-visible (X.691 10.3), so the
+effective PER constraint is the parent's (1..128,...). The missing extension
+bit shifts all following bits; asn1c failed to decode a POIM ParkingAvailability
+message that Marben and the producer encode with the bit.
+
+Fix: skip _remove_extensions() when the component constraint consists only
+of component relation / table constraints (ACT_CA_CRC).
+
+Effect on ETSI 2026 generated code (only PER constraints change):
+  AsnWrappedPoiInformationBlock.c  poiType  (1..128)  -> (1..128,...)
+  AsnInformationContainer.c        (IVI)    (0..127)  -> (0..127,...)
+  AsnWrappedExtensionContainer.c            (1..16)   -> (1..16,...)
+
+Apply: git apply patches/0001-keep-extensibility-for-table-constrained-class-fields.patch
+
+diff --git a/libasn1fix/asn1fix_constraint.c b/libasn1fix/asn1fix_constraint.c
+index c2f6e054..5190b6f1 100644
+--- a/libasn1fix/asn1fix_constraint.c
++++ b/libasn1fix/asn1fix_constraint.c
+@@ -7,6 +7,17 @@ static int constraint_type_resolve(arg_t *arg, asn1p_constraint_t *ct);
+ static int constraint_object_resolve(arg_t *arg, asn1p_value_t *value);
+ static int constraint_value_resolve(arg_t *arg, asn1p_value_t **value, enum asn1p_constraint_type_e real_ctype);
+ 
++static int
++_only_table_constraints(const asn1p_constraint_t *ct) {
++	unsigned int i;
++	if(!ct) return 0;
++	if(ct->type == ACT_CA_CRC) return 1;
++	if(ct->type != ACT_CA_SET || ct->el_count == 0) return 0;
++	for(i = 0; i < ct->el_count; i++)
++		if(!_only_table_constraints(ct->elements[i])) return 0;
++	return 1;
++}
++
+ int
+ asn1constraint_pullup(arg_t *arg) {
+ 	asn1p_expr_t *expr = arg->expr;
+@@ -103,8 +114,10 @@ asn1constraint_pullup(arg_t *arg) {
+ 	if(ct_parent) {
+ 		/*
+ 		 * If we have a parent, remove all the extensions (46.4).
++		 * A table constraint alone is not PER-visible and keeps them.
+ 		 */
+-		_remove_extensions(arg, ct_parent, 0);
++		if(!_only_table_constraints(ct_expr))
++			_remove_extensions(arg, ct_parent, 0);
+ 
+ 		expr->combined_constraints = ct_parent;
+ 		if(ct_expr->type == ACT_CA_SET) {
