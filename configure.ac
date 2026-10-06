@@ -1,16 +1,9 @@
 dnl Compute version string safely: use git if available, else fallback
 m4_define([ASN1C_VERSION], m4_esyscmd_s([
-  echo $(git describe --tags --long --always --dirty || echo NOGIT)-$(git log -1 --format=%ad --date=short || date +%F)
+  echo $(git describe --tags --long --always --dirty || echo NOGIT)-opencits-$(git log -1 --format=%cd --date=short || date +%F)
 ]))
 
-dnl Compute bug report URL safely: use git if available, else fallback
-m4_define([ASN1C_BUGURL], m4_esyscmd_s([
-  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git remote get-url origin 2>/dev/null | sed 's/.git$//'
-  else
-    echo -n "https://github.com/mouse07410/asn1c/issues"
-  fi
-]))
+m4_define([ASN1C_BUGURL], [https://github.com/opencits/asn1c-opencits/issues])
 
 AC_INIT([asn1c], ASN1C_VERSION, ASN1C_BUGURL)
 AC_CONFIG_AUX_DIR(config)
